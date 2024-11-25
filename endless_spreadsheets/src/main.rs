@@ -110,7 +110,6 @@ fn main() {
             Fr::from(6),
         ]),
     };
-
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
 }
