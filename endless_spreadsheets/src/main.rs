@@ -14,6 +14,9 @@ const STEPS: usize = 5;
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
     values: Value<Vec<F>>,
+    // When creating a proof you assign the Values in the circuit struct with the witness and run
+    // synthesis. Synthesis then assigns the values in the spreadsheet according to the Values in
+    // the circuit struct.
 }
 
 #[derive(Clone, Debug)]
@@ -98,9 +101,16 @@ fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
-        values: Value::known(vec![Fr::from(1), Fr::from(2),
-                                  Fr::from(3), Fr::from(4), Fr::from(5)])
+        values: Value::known(vec![
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(6),
+        ]),
     };
+
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
 }
