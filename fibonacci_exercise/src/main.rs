@@ -9,7 +9,7 @@ use halo2_proofs::{
 
 use ff::Field;
 
-const STEPS: usize = 5;
+const STEPS: usize = 10;
 
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
@@ -103,15 +103,16 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
 
 fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
+
+    let mut fib: Vec<Fr> = vec![Fr::from(0), Fr::from(1)];
+    for i in 1..STEPS {
+        let new = fib[i] + fib[i-1];
+        fib.push(new);
+    }
+
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
-        values: Value::known(vec![
-            Fr::from(0),
-            Fr::from(1),
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(3),
-        ]),
+        values: Value::known(fib),
     };
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
