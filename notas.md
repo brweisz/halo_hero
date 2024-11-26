@@ -30,6 +30,7 @@ region.assign_advice(descripcion?,
                      instancia de columna (de tipo advice), 
                      offset dentro de la region,
                      to: valor)
+region.constrain_equal(cell, cell)
 
 Estructura de la traza
 ----------------------
