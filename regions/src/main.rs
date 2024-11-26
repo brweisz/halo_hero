@@ -26,6 +26,9 @@ struct TestConfig<F: Field + Clone> {
 
 impl<F: Field> TestCircuit<F> {
     /// This region occupies 3 rows.
+    /// La función mul lo que hace es recibir 2 celdas (más objetos necesarios para la construccion
+    /// de la traza) y devolver una tercera celda con el producto de las 2 primeras.
+    /// En este lugar es que se hace la multiplicación real de valores.
     fn mul(
         config: &<Self as Circuit<F>>::Config,
         layouter: &mut impl Layouter<F>,
@@ -62,7 +65,7 @@ impl<F: Field> TestCircuit<F> {
                     || v2,
                 )?;
 
-                // turn on the gate
+                // Here it's enforced the multiplication constraint
                 config.q_mul.enable(&mut region, 0)?;
                 Ok(w2)
             },
@@ -130,7 +133,7 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
     ) -> Result<(), Error> {
         // create a new free variable
         let a = TestCircuit::<F>::unconstrained(
-            &config, //
+            &config,
             &mut layouter,
             self.secret.clone(),
         )?;
@@ -164,7 +167,7 @@ fn main() {
 
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
-        secret: Value::known(Fr::one()),
+        secret: Value::known(Fr::from(2)),
     };
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();

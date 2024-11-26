@@ -9,7 +9,9 @@ Se hace a través de retornar un struct que representa la configuración. Intern
 "This is a description of the circuit environment, such as the gate, column and permutation arrangements."
 
 Acá se usan varios otros objetos:
-
+* Selector: sirve para activar o desactivar constraints sobre las columnas.
+* Column<ColumnType>
+  * ColumnType: hay varios pero el que vi hasta ahora es Advice
 
 ------------------------------------------------
 
@@ -20,6 +22,7 @@ Acá se usan varios otros objetos:
 
 layouter.assign_region(funcion que devuelve el nombre de la region, 
                         funcion que recibe la region y la configura)
+    --> Devuelve una AssignedCell
 
 La región tiene los métodos:
 
