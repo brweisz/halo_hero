@@ -33,12 +33,11 @@ impl<F: Field> TestCircuit<F> {
             || "mul",
             |mut region| {
 
-                let w0 = lhs.value().cloned();
-                let w1 = rhs.value().cloned();
-                let w2 = w0.and_then(|w0| w1.and_then(|w1| Value::known(w0 * w1)));
 
-                let _w0 = lhs.copy_advice(|| "assign w0", &mut region, config.advice, 0)?;
-                let _w1 = rhs.copy_advice(|| "assign w1", &mut region, config.advice, 1)?;
+                let w0: AssignedCell<F, F> = lhs.copy_advice(|| "assign w0", &mut region, config.advice, 0)?;
+                let w1 = rhs.copy_advice(|| "assign w1", &mut region, config.advice, 1)?;
+
+                let w2 = w0.value().and_then(|w0| w1.value().and_then(|w1| Value::known((*w0) * (*w1))));
                 let w2 = region.assign_advice(|| "assign w2", config.advice, 2, || w2)?;
                 config.q_mul.enable(&mut region, 0)?;
                 Ok(w2)
