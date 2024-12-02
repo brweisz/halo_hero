@@ -1,11 +1,11 @@
 ```fn configure(meta: &mut ConstraintSystem<F>)``` --> Configuración sobre el circuito. Define...
-- Las columnas de la traza (selectoras, advice)
+- Las columnas de la traza (selectoras, advice, fixed)
 - Las Gates existentes
 - Permutaciones
 - Lookups
 - Etc
 
-Se hace a través de retornar un struct que representa la configuración. Internamente usa un objeto ConstraintSystem:
+Se retorna un struct que representa la configuración. Internamente usa un objeto ConstraintSystem:
 "This is a description of the circuit environment, such as the gate, column and permutation arrangements."
 
 Acá se usan varios otros objetos:
@@ -20,16 +20,20 @@ Acá se usan varios otros objetos:
     organizar las regiones de la traza. Basicamente tiene que construir la traza y basarse en la forma que tiene la 
     misma según la configuración.
 
-layouter.assign_region(funcion que devuelve el nombre de la region, 
-                        funcion que recibe la region y la configura)
-    --> Devuelve una AssignedCell
+layouter.assign_region(nombre de la region, funcion que recibe la region y la configura) --> Devuelve una AssignedCell
 
 La región tiene los métodos:
 
-region.assign_advice(descripcion?, 
+region.assign_advice(descripcion, 
                      instancia de columna (de tipo advice), 
                      offset dentro de la region,
                      to: valor)
+
+region.assign_fixed(descripcion,
+                    column,
+                    offset in region,
+                    to: valor)
+
 region.constrain_equal(cell, cell)
 
 Estructura de la traza
