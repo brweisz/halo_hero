@@ -11,7 +11,8 @@ use halo2_proofs::circuit::{AssignedCell, Region, Value};
 use halo2_proofs::plonk::{Advice, Column, Fixed};
 use halo2_proofs::poly::Rotation;
 
-struct PlonkChip<F: Field> {
+#[derive(Clone, Debug)]
+struct PlonkChip{
     ql: Column<Fixed>,
     qr: Column<Fixed>,
     qm: Column<Fixed>,
@@ -19,7 +20,7 @@ struct PlonkChip<F: Field> {
     qc: Column<Fixed>,
 }
 
-impl<F: Field> PlonkChip<F> {
+impl<F: Field> PlonkChip {
     fn new_for_advices(
         meta: &mut ConstraintSystem<F>,
         a: Column<Advice>,
@@ -49,8 +50,8 @@ impl<F: Field> PlonkChip<F> {
         Self { ql, qr, qm, qo, qc }
     }
 
-    fn multiply_cells(&mut self,
-                      config: &mut TestConfig<F>,
+    fn multiply_cells(&self,
+                      config: &TestConfig<F>,
                       layouter: &mut impl Layouter<F>,
                       lhs: AssignedCell<F, F>,
                       rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
@@ -69,8 +70,8 @@ impl<F: Field> PlonkChip<F> {
         result_cell
     }
 
-    fn add_cells(&mut self,
-                  config: &mut TestConfig<F>,
+    fn add_cells(&self,
+                  config: &TestConfig<F>,
                   layouter: &mut impl Layouter<F>,
                   lhs: AssignedCell<F, F>,
                   rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
@@ -89,8 +90,8 @@ impl<F: Field> PlonkChip<F> {
         result_cell
     }
 
-    fn new_constant_cell(&mut self,
-                         config: &mut TestConfig<F>,
+    fn new_constant_cell(&self,
+                         config: &TestConfig<F>,
                          layouter: &mut impl Layouter<F>,
                          constant_value: Value<F>) -> Option<AssignedCell<F,F>>{
         let mut result_cell = None;
@@ -104,8 +105,8 @@ impl<F: Field> PlonkChip<F> {
         result_cell
     }
 
-    fn enforce_gates_to_be_equal(&mut self,
-                                 config: &mut TestConfig<F>,
+    fn enforce_cells_to_be_equal(&self,
+                                 config: &TestConfig<F>,
                                  layouter: &mut impl Layouter<F>,
                                  lhs: AssignedCell<F, F>,
                                  rhs: AssignedCell<F, F>){
@@ -119,7 +120,7 @@ impl<F: Field> PlonkChip<F> {
         });
     }
 
-    fn _assign_plonk_regions(region: &mut Region<F>, config: &mut TestConfig<F>, ql: F, qr: F, qm: F, qo: F, qc: F,){
+    fn _assign_plonk_regions(region: &mut Region<F>, config: &TestConfig<F>, ql: F, qr: F, qm: F, qo: F, qc: F,){
         let _ql = region.assign_fixed(||"Ql", config.plonk_chip.ql, 0, || Value::known(ql));
         let _qr = region.assign_fixed(||"Qr", config.plonk_chip.qr, 0, || Value::known(qr));
         let _qm = region.assign_fixed(||"Qm", config.plonk_chip.qm, 0, || Value::known(qm));
@@ -130,15 +131,35 @@ impl<F: Field> PlonkChip<F> {
 
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
+    x: Value<F>,
+    y: Value<F>,
+    z: Value<F>,
 }
 
 #[derive(Clone, Debug)]
 struct TestConfig<F: Field + Clone> {
     _ph: PhantomData<F>,
-    plonk_chip: PlonkChip<F>,
+    plonk_chip: PlonkChip,
     a: Column<Advice>,
     b: Column<Advice>,
     c: Column<Advice>,
+}
+
+impl<F: Field> TestCircuit<F>{
+    fn unconstrained(&self,
+                  config: &<TestCircuit<F> as Circuit<F>>::Config,
+                  layouter: &mut impl Layouter<F>,
+                  value: Value<F>) -> Result<AssignedCell<F, F>, plonk::Error>
+    {
+        layouter.assign_region(||"Free variable", |mut region|{
+            region.assign_advice(
+                ||"Free variable",
+                config.a,
+                0,
+                value
+            )
+        })
+    }
 }
 
 impl<F: Field> Circuit<F> for TestCircuit<F> {
@@ -146,7 +167,12 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        TestCircuit { _ph: PhantomData }
+        TestCircuit {
+            _ph: PhantomData,
+            x: Value::unknown(),
+            y: Value::unknown(),
+            z: Value::unknown()
+        }
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
@@ -173,15 +199,39 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
     fn synthesize(
         &self,
         config: Self::Config,
-        layouter: impl Layouter<F>,
+        mut layouter: impl Layouter<F>,
     ) -> Result<(), plonk::Error> {
+
+        // Set values
+        let x = self.unconstrained(&config, &mut layouter, self.x)?;
+        let y = self.unconstrained(&config, &mut layouter, self.y)?;
+        let z = self.unconstrained(&config, &mut layouter, self.z)?;
+
+        // aux1 == x*y
+        let aux1 = config.plonk_chip.multiply_cells(&config, &mut layouter, x, y.clone()).unwrap();
+        // aux2 == aux1 + z
+        let aux2 =  config.plonk_chip.add_cells(&config, &mut layouter, aux1.clone(), z.clone()).unwrap();
+        // aux3 == aux1 * aux2
+        let aux3 = config.plonk_chip.multiply_cells(&config, &mut layouter, aux1, aux2).unwrap();
+        // y == z
+        config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, y, z);
+        // aux3 == 8
+        let constant_8 = config.plonk_chip.new_constant_cell(&config, &mut layouter, Value::known(F::from(8))).unwrap();
+        config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, aux3, constant_8);
+
         Ok(())
     }
 }
 
 fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
-    let circuit = TestCircuit::<Fr> { _ph: PhantomData };
+
+    let circuit = TestCircuit::<Fr> {
+        _ph: PhantomData,
+        x: Value::known(Fr::ONE),
+        y: Value::known(Fr::from(2)),
+        z: Value::known(Fr::from(2)),
+    };
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
 }
