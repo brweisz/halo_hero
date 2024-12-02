@@ -7,7 +7,7 @@ use halo2_proofs::{
 };
 
 use ff::Field;
-use halo2_proofs::circuit::{AssignedCell, Value};
+use halo2_proofs::circuit::{AssignedCell, Region, Value};
 use halo2_proofs::plonk::{Advice, Column, Fixed};
 use halo2_proofs::poly::Rotation;
 
@@ -56,11 +56,7 @@ impl<F: Field> PlonkChip<F> {
                       rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
         let mut result_cell = None;
         let _ = layouter.assign_region(||"multiplication", |mut region| {
-            let _ql = region.assign_fixed(||"Ql", config.plonk_chip.ql, 0, || Value::known(F::ZERO))?;
-            let _qr = region.assign_fixed(||"Qr", config.plonk_chip.qr, 0, || Value::known(F::ZERO))?;
-            let _qm = region.assign_fixed(||"Qm", config.plonk_chip.qm, 0, || Value::known(F::ONE))?;
-            let _qo = region.assign_fixed(||"Qo", config.plonk_chip.qo, 0, || Value::known(-F::ONE))?;
-            let _qc = region.assign_fixed(||"Qc", config.plonk_chip.qc, 0, || Value::known(F::ZERO))?;
+            Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ONE, -F::ONE, F::ZERO);
 
             let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
             let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
@@ -79,12 +75,8 @@ impl<F: Field> PlonkChip<F> {
                   lhs: AssignedCell<F, F>,
                   rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
         let mut result_cell = None;
-        let _ = layouter.assign_region(||"multiplication", |mut region| {
-            let _ql = region.assign_fixed(||"Ql", config.plonk_chip.ql, 0, || Value::known(F::ONE))?;
-            let _qr = region.assign_fixed(||"Qr", config.plonk_chip.qr, 0, || Value::known(F::ONE))?;
-            let _qm = region.assign_fixed(||"Qm", config.plonk_chip.qm, 0, || Value::known(F::ZERO))?;
-            let _qo = region.assign_fixed(||"Qo", config.plonk_chip.qo, 0, || Value::known(-F::ONE))?;
-            let _qc = region.assign_fixed(||"Qc", config.plonk_chip.qc, 0, || Value::known(F::ZERO))?;
+        let _ = layouter.assign_region(||"addition", |mut region| {
+            Self::_assign_plonk_regions(&mut region, config, F::ONE, F::ONE, F::ZERO, -F::ONE, F::ZERO);
 
             let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
             let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
@@ -95,6 +87,44 @@ impl<F: Field> PlonkChip<F> {
             Ok(())
         });
         result_cell
+    }
+
+    fn new_constant_cell(&mut self,
+                         config: &mut TestConfig<F>,
+                         layouter: &mut impl Layouter<F>,
+                         constant_value: Value<F>) -> Option<AssignedCell<F,F>>{
+        let mut result_cell = None;
+        let _ = layouter.assign_region(||"constant", |mut region| {
+            Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ZERO, -F::ONE, constant_value);
+
+            let c = region.assign_advice(||"Result", config.c, 0, constant_value)?;
+            result_cell = Some(c);
+            Ok(())
+        });
+        result_cell
+    }
+
+    fn enforce_gates_to_be_equal(&mut self,
+                                 config: &mut TestConfig<F>,
+                                 layouter: &mut impl Layouter<F>,
+                                 lhs: AssignedCell<F, F>,
+                                 rhs: AssignedCell<F, F>){
+        let _ = layouter.assign_region(||"addition", |mut region| {
+            Self::_assign_plonk_regions(&mut region, config, F::ONE, -F::ONE, F::ZERO, F::ZERO, F::ZERO);
+
+            let _a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
+            let _b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
+
+            Ok(())
+        });
+    }
+
+    fn _assign_plonk_regions(region: &mut Region<F>, config: &mut TestConfig<F>, ql: F, qr: F, qm: F, qo: F, qc: F,){
+        let _ql = region.assign_fixed(||"Ql", config.plonk_chip.ql, 0, || Value::known(ql));
+        let _qr = region.assign_fixed(||"Qr", config.plonk_chip.qr, 0, || Value::known(qr));
+        let _qm = region.assign_fixed(||"Qm", config.plonk_chip.qm, 0, || Value::known(qm));
+        let _qo = region.assign_fixed(||"Qo", config.plonk_chip.qo, 0, || Value::known(qo));
+        let _qc = region.assign_fixed(||"Qc", config.plonk_chip.qc, 0, || Value::known(qc));
     }
 }
 
