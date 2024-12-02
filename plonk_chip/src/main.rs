@@ -12,7 +12,8 @@ use halo2_proofs::plonk::{Advice, Column, Fixed};
 use halo2_proofs::poly::Rotation;
 
 #[derive(Clone, Debug)]
-struct PlonkChip{
+struct PlonkChip<F>{
+    _ph: PhantomData<F>,
     ql: Column<Fixed>,
     qr: Column<Fixed>,
     qm: Column<Fixed>,
@@ -20,7 +21,7 @@ struct PlonkChip{
     qc: Column<Fixed>,
 }
 
-impl<F: Field> PlonkChip {
+impl<F: Field> PlonkChip<F> {
     fn new_for_advices(
         meta: &mut ConstraintSystem<F>,
         a: Column<Advice>,
@@ -47,7 +48,7 @@ impl<F: Field> PlonkChip {
             vec![a_ * ql_ + b_ * qr_ + a_ * b_ * qm_ + qo_ * c_ + qc_]
         });
 
-        Self { ql, qr, qm, qo, qc }
+        Self { _ph: PhantomData, ql, qr, qm, qo, qc }
     }
 
     fn multiply_cells(&self,
@@ -62,7 +63,7 @@ impl<F: Field> PlonkChip {
             let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
             let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
             let c_value = a.value().cloned() * b.value().cloned();
-            let c = region.assign_advice(||"Result", config.c, 0, c_value)?;
+            let c = region.assign_advice(||"Result", config.c, 0, || c_value)?;
 
             result_cell = Some(c);
             Ok(())
@@ -82,7 +83,7 @@ impl<F: Field> PlonkChip {
             let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
             let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
             let c_value = a.value().cloned() + b.value().cloned();
-            let c = region.assign_advice(||"Result", config.c, 0, c_value)?;
+            let c = region.assign_advice(||"Result", config.c, 0, || c_value)?;
 
             result_cell = Some(c);
             Ok(())
@@ -98,7 +99,7 @@ impl<F: Field> PlonkChip {
         let _ = layouter.assign_region(||"constant", |mut region| {
             Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ZERO, -F::ONE, constant_value);
 
-            let c = region.assign_advice(||"Result", config.c, 0, constant_value)?;
+            let c = region.assign_advice(||"Result", config.c, 0, || Value::known(constant_value))?;
             result_cell = Some(c);
             Ok(())
         });
@@ -139,7 +140,7 @@ struct TestCircuit<F: Field> {
 #[derive(Clone, Debug)]
 struct TestConfig<F: Field + Clone> {
     _ph: PhantomData<F>,
-    plonk_chip: PlonkChip,
+    plonk_chip: PlonkChip<F>,
     a: Column<Advice>,
     b: Column<Advice>,
     c: Column<Advice>,
@@ -156,7 +157,7 @@ impl<F: Field> TestCircuit<F>{
                 ||"Free variable",
                 config.a,
                 0,
-                value
+                || value
             )
         })
     }
@@ -184,7 +185,7 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
         meta.enable_equality(b);
         meta.enable_equality(c);
 
-        let plonk_chip = PlonkChip::new_for_advices(meta, a, b, c);
+        let plonk_chip: PlonkChip<F> = PlonkChip::new_for_advices(meta, a, b, c);
 
         TestConfig {
             _ph: PhantomData,
@@ -216,7 +217,7 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
         // y == z
         config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, y, z);
         // aux3 == 8
-        let constant_8 = config.plonk_chip.new_constant_cell(&config, &mut layouter, Value::known(F::from(8))).unwrap();
+        let constant_8 = config.plonk_chip.new_constant_cell(&config, &mut layouter, F::from_u64(8)).unwrap();
         config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, aux3, constant_8);
 
         Ok(())
@@ -229,8 +230,8 @@ fn main() {
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
         x: Value::known(Fr::ONE),
-        y: Value::known(Fr::from(2)),
-        z: Value::known(Fr::from(2)),
+        y: Value::known(Fr::from_u64(2)),
+        z: Value::known(Fr::from_u64(2)),
     };
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
