@@ -72,6 +72,30 @@ impl<F: Field> PlonkChip<F> {
         });
         result_cell
     }
+
+    fn add_cells(&mut self,
+                  config: &mut TestConfig<F>,
+                  layouter: &mut impl Layouter<F>,
+                  lhs: AssignedCell<F, F>,
+                  rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
+        let mut result_cell = None;
+        let _ = layouter.assign_region(||"multiplication", |mut region| {
+            let _ql = region.assign_fixed(||"Ql", config.plonk_chip.ql, 0, || Value::known(F::ONE))?;
+            let _qr = region.assign_fixed(||"Qr", config.plonk_chip.qr, 0, || Value::known(F::ONE))?;
+            let _qm = region.assign_fixed(||"Qm", config.plonk_chip.qm, 0, || Value::known(F::ZERO))?;
+            let _qo = region.assign_fixed(||"Qo", config.plonk_chip.qo, 0, || Value::known(-F::ONE))?;
+            let _qc = region.assign_fixed(||"Qc", config.plonk_chip.qc, 0, || Value::known(F::ZERO))?;
+
+            let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
+            let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
+            let c_value = a.value().cloned() + b.value().cloned();
+            let c = region.assign_advice(||"Result", config.c, 0, c_value)?;
+
+            result_cell = Some(c);
+            Ok(())
+        });
+        result_cell
+    }
 }
 
 struct TestCircuit<F: Field> {
