@@ -1,30 +1,19 @@
-// use crate::arithmetic::mul_512;
-// use crate::arithmetic::sbb;
-// use crate::{
-//     arithmetic::{CurveEndo, EndoParameters},
-//     endo,
-// };
-use ff::PrimeField;
-use ff::WithSmallOrderMulGroup;
-// pub use pasta_curves::{pallas, vesta, Ep, EpAffine, Eq, EqAffine, Fp, Fq};
 use std::convert::TryInto;
-
-// -----------------------
-
 use std::marker::PhantomData;
+
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     dev::MockProver,
     plonk::{self, Circuit, ConstraintSystem},
 };
 
-use ff::{Field};
+use ff::{Field, PrimeField};
 use halo2_proofs::circuit::{AssignedCell, Region, Value};
 use halo2_proofs::plonk::{Advice, Column, Fixed};
 use halo2_proofs::poly::Rotation;
 
 #[derive(Clone, Debug)]
-struct PlonkChip<F>{
+struct PlonkChip<F> {
     _ph: PhantomData<F>,
     ql: Column<Fixed>,
     qr: Column<Fixed>,
@@ -60,85 +49,114 @@ impl<F: Field> PlonkChip<F> {
             vec![a_.clone() * ql_ + b_.clone() * qr_ + a_ * b_ * qm_ + qo_ * c_ + qc_]
         });
 
-        Self { _ph: PhantomData, ql, qr, qm, qo, qc }
+        Self {
+            _ph: PhantomData,
+            ql,
+            qr,
+            qm,
+            qo,
+            qc,
+        }
     }
 
-    fn multiply_cells(&self,
-                      config: &TestConfig<F>,
-                      layouter: &mut impl Layouter<F>,
-                      lhs: AssignedCell<F, F>,
-                      rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
+    fn multiply_cells(
+        &self,
+        config: &TestConfig<F>,
+        layouter: &mut impl Layouter<F>,
+        lhs: AssignedCell<F, F>,
+        rhs: AssignedCell<F, F>,
+    ) -> Option<AssignedCell<F, F>> {
         let mut result_cell = None;
-        let _ = layouter.assign_region(||"multiplication", |mut region| {
-            Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ONE, -F::ONE, F::ZERO);
+        let _ = layouter.assign_region(
+            || "multiplication",
+            |mut region| {
+                Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ONE, -F::ONE, F::ZERO);
 
-            let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
-            let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
-            let c_value = a.value().cloned() * b.value().cloned();
-            let c = region.assign_advice(||"Result", config.c, 0, || c_value)?;
+                let a = lhs.copy_advice(|| "Copy a", &mut region, config.a, 0)?;
+                let b = rhs.copy_advice(|| "Copy b", &mut region, config.b, 0)?;
+                let c_value = a.value().cloned() * b.value().cloned();
+                let c = region.assign_advice(|| "Result", config.c, 0, || c_value)?;
 
-            result_cell = Some(c);
-            Ok(())
-        });
+                result_cell = Some(c);
+                Ok(())
+            },
+        );
         result_cell
     }
 
-    fn add_cells(&self,
-                  config: &TestConfig<F>,
-                  layouter: &mut impl Layouter<F>,
-                  lhs: AssignedCell<F, F>,
-                  rhs: AssignedCell<F, F>) -> Option<AssignedCell<F,F>>{
+    fn add_cells(
+        &self,
+        config: &TestConfig<F>,
+        layouter: &mut impl Layouter<F>,
+        lhs: AssignedCell<F, F>,
+        rhs: AssignedCell<F, F>,
+    ) -> Option<AssignedCell<F, F>> {
         let mut result_cell = None;
-        let _ = layouter.assign_region(||"addition", |mut region| {
-            Self::_assign_plonk_regions(&mut region, config, F::ONE, F::ONE, F::ZERO, -F::ONE, F::ZERO);
+        let _ = layouter.assign_region(
+            || "addition",
+            |mut region| {
+                Self::_assign_plonk_regions(&mut region, config, F::ONE, F::ONE, F::ZERO, -F::ONE, F::ZERO);
 
-            let a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
-            let b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
-            let c_value = a.value().cloned() + b.value().cloned();
-            let c = region.assign_advice(||"Result", config.c, 0, || c_value)?;
+                let a = lhs.copy_advice(|| "Copy a", &mut region, config.a, 0)?;
+                let b = rhs.copy_advice(|| "Copy b", &mut region, config.b, 0)?;
+                let c_value = a.value().cloned() + b.value().cloned();
+                let c = region.assign_advice(|| "Result", config.c, 0, || c_value)?;
 
-            result_cell = Some(c);
-            Ok(())
-        });
+                result_cell = Some(c);
+                Ok(())
+            },
+        );
         result_cell
     }
 
-    fn new_constant_cell(&self,
-                         config: &TestConfig<F>,
-                         layouter: &mut impl Layouter<F>,
-                         constant_value: F) -> Option<AssignedCell<F,F>>{
+    fn new_constant_cell(
+        &self,
+        config: &TestConfig<F>,
+        layouter: &mut impl Layouter<F>,
+        constant_value: F,
+    ) -> Option<AssignedCell<F, F>> {
         let mut result_cell = None;
-        let _ = layouter.assign_region(||"constant", |mut region| {
-            Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ZERO, -F::ONE, constant_value);
+        let _ = layouter.assign_region(
+            || "constant",
+            |mut region| {
+                Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ZERO, -F::ONE, constant_value);
 
-            let c = region.assign_advice(||"Result", config.c, 0, || Value::known(constant_value))?;
-            result_cell = Some(c);
-            Ok(())
-        });
+                let c = region.assign_advice(|| "Result", config.c,
+                                             0, || Value::known(constant_value))?;
+                result_cell = Some(c);
+                Ok(())
+            },
+        );
         result_cell
     }
 
-    fn enforce_cells_to_be_equal(&self,
-                                 config: &TestConfig<F>,
-                                 layouter: &mut impl Layouter<F>,
-                                 lhs: AssignedCell<F, F>,
-                                 rhs: AssignedCell<F, F>){
-        let _ = layouter.assign_region(||"addition", |mut region| {
-            Self::_assign_plonk_regions(&mut region, config, F::ONE, -F::ONE, F::ZERO, F::ZERO, F::ZERO);
+    fn enforce_cells_to_be_equal(
+        &self,
+        config: &TestConfig<F>,
+        layouter: &mut impl Layouter<F>,
+        lhs: AssignedCell<F, F>,
+        rhs: AssignedCell<F, F>,
+    ) {
+        let _ = layouter.assign_region(
+            || "addition",
+            |mut region| {
+                Self::_assign_plonk_regions(&mut region, config, F::ONE, -F::ONE, F::ZERO, F::ZERO, F::ZERO);
 
-            let _a = lhs.copy_advice(||"Copy a", &mut region, config.a, 0)?;
-            let _b = rhs.copy_advice(||"Copy b", &mut region, config.b, 0)?;
+                let _a = lhs.copy_advice(|| "Copy a", &mut region, config.a, 0)?;
+                let _b = rhs.copy_advice(|| "Copy b", &mut region, config.b, 0)?;
 
-            Ok(())
-        });
+                Ok(())
+            },
+        );
     }
 
-    fn _assign_plonk_regions(region: &mut Region<F>, config: &TestConfig<F>, ql: F, qr: F, qm: F, qo: F, qc: F,){
-        let _ql = region.assign_fixed(||"Ql", config.plonk_chip.ql, 0, || Value::known(ql));
-        let _qr = region.assign_fixed(||"Qr", config.plonk_chip.qr, 0, || Value::known(qr));
-        let _qm = region.assign_fixed(||"Qm", config.plonk_chip.qm, 0, || Value::known(qm));
-        let _qo = region.assign_fixed(||"Qo", config.plonk_chip.qo, 0, || Value::known(qo));
-        let _qc = region.assign_fixed(||"Qc", config.plonk_chip.qc, 0, || Value::known(qc));
+    fn _assign_plonk_regions(region: &mut Region<F>, config: &TestConfig<F>,
+        ql: F, qr: F, qm: F, qo: F, qc: F) {
+        let _ql = region.assign_fixed(|| "Ql", config.plonk_chip.ql, 0, || Value::known(ql));
+        let _qr = region.assign_fixed(|| "Qr", config.plonk_chip.qr, 0, || Value::known(qr));
+        let _qm = region.assign_fixed(|| "Qm", config.plonk_chip.qm, 0, || Value::known(qm));
+        let _qo = region.assign_fixed(|| "Qo", config.plonk_chip.qo, 0, || Value::known(qo));
+        let _qc = region.assign_fixed(|| "Qc", config.plonk_chip.qc, 0, || Value::known(qc));
     }
 }
 
@@ -158,20 +176,17 @@ struct TestConfig<F: Field + Clone> {
     c: Column<Advice>,
 }
 
-impl<F: Field + PrimeField> TestCircuit<F>{
-    fn unconstrained(&self,
-                  config: &<TestCircuit<F> as Circuit<F>>::Config,
-                  layouter: &mut impl Layouter<F>,
-                  value: Value<F>) -> Result<AssignedCell<F, F>, plonk::Error>
-    {
-        layouter.assign_region(||"Free variable", |mut region|{
-            region.assign_advice(
-                ||"Free variable",
-                config.a,
-                0,
-                || value
-            )
-        })
+impl<F: Field + PrimeField> TestCircuit<F> {
+    fn unconstrained(
+        &self,
+        config: &<TestCircuit<F> as Circuit<F>>::Config,
+        layouter: &mut impl Layouter<F>,
+        value: Value<F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error> {
+        layouter.assign_region(
+            || "Free variable",
+            |mut region| region.assign_advice(|| "Free variable", config.a, 0, || value),
+        )
     }
 }
 
@@ -184,7 +199,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
             _ph: PhantomData,
             x: Value::unknown(),
             y: Value::unknown(),
-            z: Value::unknown()
+            z: Value::unknown(),
         }
     }
 
@@ -199,13 +214,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
 
         let plonk_chip: PlonkChip<F> = PlonkChip::new_for_advices(meta, a, b, c);
 
-        TestConfig {
-            _ph: PhantomData,
-            plonk_chip,
-            a,
-            b,
-            c,
-        }
+        TestConfig { _ph: PhantomData, plonk_chip, a, b, c }
     }
 
     #[allow(unused_variables)]
@@ -214,7 +223,6 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), plonk::Error> {
-
         // Set values
         let x = self.unconstrained(&config, &mut layouter, self.x)?;
         let y = self.unconstrained(&config, &mut layouter, self.y)?;
@@ -223,7 +231,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
         // aux1 == x*y
         let aux1 = config.plonk_chip.multiply_cells(&config, &mut layouter, x, y.clone()).unwrap();
         // aux2 == aux1 + z
-        let aux2 =  config.plonk_chip.add_cells(&config, &mut layouter, aux1.clone(), z.clone()).unwrap();
+        let aux2 = config.plonk_chip.add_cells(&config, &mut layouter, aux1.clone(), z.clone()).unwrap();
         // aux3 == aux1 * aux2
         let aux3 = config.plonk_chip.multiply_cells(&config, &mut layouter, aux1, aux2).unwrap();
         // y == z
