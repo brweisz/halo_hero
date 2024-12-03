@@ -14,9 +14,7 @@ use halo2_proofs::poly::Rotation;
 
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
-    // public_inputs: Value<Vec<F>>,
-    // private_inputs: Value<Vec<F>>
-    public_inputs: [Value<F>; 2],
+    public_inputs: [Value<F>; 3],
     private_inputs: [Value<F>; 1],
 }
 
@@ -216,7 +214,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
     fn without_witnesses(&self) -> Self {
         TestCircuit {
             _ph: PhantomData,
-            public_inputs: [Value::unknown(); 2],
+            public_inputs: [Value::unknown(); 3],
             private_inputs: [Value::unknown(); 1],
         }
     }
@@ -230,6 +228,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
         meta.enable_equality(a);
         meta.enable_equality(b);
         meta.enable_equality(c);
+        meta.enable_equality(pi);
 
         let plonk_chip: PlonkChip<F> = PlonkChip::new_for_advices(meta, pi, a, b, c);
 
@@ -248,23 +247,29 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
 
         // Aplica para el programa específico
 
-        // public_inputs = [x,y]
+        // public_inputs = [x,y,expected_result]
         // private_inputs = [z]
         let x = public_input_cells[0].clone();
         let y = public_input_cells[1].clone();
+        let expected_result = public_input_cells[2].clone();
         let z = private_input_cells[0].clone();
 
         // aux1 == x*y
-        let aux1 = config.plonk_chip.multiply_cells(&config, &mut layouter, x, y.clone()).unwrap();
+        let aux1 = config.plonk_chip.multiply_cells(&config, &mut layouter, x.clone(), y.clone()).unwrap();
         // aux2 == aux1 + z
         let aux2 = config.plonk_chip.add_cells(&config, &mut layouter, aux1.clone(), z.clone()).unwrap();
         // aux3 == aux1 * aux2
         let aux3 = config.plonk_chip.multiply_cells(&config, &mut layouter, aux1, aux2).unwrap();
         // y == z
-        config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, y, z);
-        // aux3 == 8
-        let constant_8 = config.plonk_chip.new_constant_cell(&config, &mut layouter, F::from_u128(8)).unwrap();
-        config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, aux3, constant_8);
+        config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, y.clone(), z);
+
+        // aux3 == expected_result
+        config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, aux3, expected_result.clone());
+
+        // Enforce public inputs
+        for (i, cell) in [x,y,expected_result].into_iter().enumerate() {
+            layouter.constrain_instance(cell.cell(), config.pi, i)?;
+        }
 
         Ok(())
     }
@@ -273,11 +278,15 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
 fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
 
-    let public_input_values = vec![Fr::from(1),Fr::from(2)];
+    let public_input_values = vec![Fr::from(1),Fr::from(2), Fr::from(8)];
     let private_input_values = vec![Fr::from(2)];
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
-        public_inputs: [Value::known(public_input_values[0]), Value::known(public_input_values[1])],
+        public_inputs: [
+            Value::known(public_input_values[0]),
+            Value::known(public_input_values[1]),
+            Value::known(public_input_values[2]),
+        ],
         private_inputs: [Value::known(private_input_values[0])],
     };
     let prover = MockProver::run(8, &circuit, vec![public_input_values]).unwrap();
