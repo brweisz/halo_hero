@@ -1,12 +1,24 @@
-use std::marker::PhantomData;
+// use crate::arithmetic::mul_512;
+// use crate::arithmetic::sbb;
+// use crate::{
+//     arithmetic::{CurveEndo, EndoParameters},
+//     endo,
+// };
+use ff::PrimeField;
+use ff::WithSmallOrderMulGroup;
+// pub use pasta_curves::{pallas, vesta, Ep, EpAffine, Eq, EqAffine, Fp, Fq};
+use std::convert::TryInto;
 
+// -----------------------
+
+use std::marker::PhantomData;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     dev::MockProver,
     plonk::{self, Circuit, ConstraintSystem},
 };
 
-use ff::Field;
+use ff::{Field};
 use halo2_proofs::circuit::{AssignedCell, Region, Value};
 use halo2_proofs::plonk::{Advice, Column, Fixed};
 use halo2_proofs::poly::Rotation;
@@ -45,7 +57,7 @@ impl<F: Field> PlonkChip<F> {
             let qo_ = meta.query_fixed(qo, Rotation::cur());
             let qc_ = meta.query_fixed(qc, Rotation::cur());
 
-            vec![a_ * ql_ + b_ * qr_ + a_ * b_ * qm_ + qo_ * c_ + qc_]
+            vec![a_.clone() * ql_ + b_.clone() * qr_ + a_ * b_ * qm_ + qo_ * c_ + qc_]
         });
 
         Self { _ph: PhantomData, ql, qr, qm, qo, qc }
@@ -94,7 +106,7 @@ impl<F: Field> PlonkChip<F> {
     fn new_constant_cell(&self,
                          config: &TestConfig<F>,
                          layouter: &mut impl Layouter<F>,
-                         constant_value: Value<F>) -> Option<AssignedCell<F,F>>{
+                         constant_value: F) -> Option<AssignedCell<F,F>>{
         let mut result_cell = None;
         let _ = layouter.assign_region(||"constant", |mut region| {
             Self::_assign_plonk_regions(&mut region, config, F::ZERO, F::ZERO, F::ZERO, -F::ONE, constant_value);
@@ -146,7 +158,7 @@ struct TestConfig<F: Field + Clone> {
     c: Column<Advice>,
 }
 
-impl<F: Field> TestCircuit<F>{
+impl<F: Field + PrimeField> TestCircuit<F>{
     fn unconstrained(&self,
                   config: &<TestCircuit<F> as Circuit<F>>::Config,
                   layouter: &mut impl Layouter<F>,
@@ -163,7 +175,7 @@ impl<F: Field> TestCircuit<F>{
     }
 }
 
-impl<F: Field> Circuit<F> for TestCircuit<F> {
+impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
     type Config = TestConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -217,7 +229,7 @@ impl<F: Field> Circuit<F> for TestCircuit<F> {
         // y == z
         config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, y, z);
         // aux3 == 8
-        let constant_8 = config.plonk_chip.new_constant_cell(&config, &mut layouter, F::from_u64(8)).unwrap();
+        let constant_8 = config.plonk_chip.new_constant_cell(&config, &mut layouter, F::from_u128(8)).unwrap();
         config.plonk_chip.enforce_cells_to_be_equal(&config, &mut layouter, aux3, constant_8);
 
         Ok(())
@@ -230,8 +242,8 @@ fn main() {
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
         x: Value::known(Fr::ONE),
-        y: Value::known(Fr::from_u64(2)),
-        z: Value::known(Fr::from_u64(2)),
+        y: Value::known(Fr::from_u128(2)),
+        z: Value::known(Fr::from_u128(2)),
     };
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
