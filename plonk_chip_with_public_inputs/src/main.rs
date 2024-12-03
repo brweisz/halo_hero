@@ -14,8 +14,10 @@ use halo2_proofs::poly::Rotation;
 
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
-    public_inputs: Value<Vec<F>>,
-    private_inputs: Value<Vec<F>>
+    // public_inputs: Value<Vec<F>>,
+    // private_inputs: Value<Vec<F>>
+    public_inputs: [Value<F>; 2],
+    private_inputs: [Value<F>; 1],
 }
 
 #[derive(Clone, Debug)]
@@ -198,10 +200,10 @@ impl<F: Field + PrimeField> TestCircuit<F> {
         let mut public_input_cells = vec![];
         let mut private_input_cells = vec![];
         for value in self.public_inputs {
-            public_input_cells.push(self.unconstrained(&config, layouter, value)?);
+            public_input_cells.push(self.unconstrained(&config, layouter, value).unwrap());
         }
         for value in self.private_inputs {
-            private_input_cells.push(self.unconstrained(&config, layouter, value)?);
+            private_input_cells.push(self.unconstrained(&config, layouter, value).unwrap());
         }
         (public_input_cells, private_input_cells)
     }
@@ -214,8 +216,8 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
     fn without_witnesses(&self) -> Self {
         TestCircuit {
             _ph: PhantomData,
-            public_inputs: Value::unknown(),
-            private_inputs: Value::unknown(),
+            public_inputs: [Value::unknown(); 2],
+            private_inputs: [Value::unknown(); 1],
         }
     }
 
@@ -272,10 +274,11 @@ fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
 
     let public_input_values = vec![Fr::from(1),Fr::from(2)];
+    let private_input_values = vec![Fr::from(2)];
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
-        public_inputs: Value::known(public_input_values),
-        private_inputs: Value::known(vec![Fr::from(2)]),
+        public_inputs: [Value::known(public_input_values[0]), Value::known(public_input_values[1])],
+        private_inputs: [Value::known(private_input_values[0])],
     };
     let prover = MockProver::run(8, &circuit, vec![public_input_values]).unwrap();
     prover.verify().unwrap();
