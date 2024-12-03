@@ -19,12 +19,13 @@ use halo2_proofs::{
 use ff::{Field, PrimeField};
 
 // ANCHOR: regex
+const ST_I: usize = 10;
 const ST_A: usize = 1;
 const ST_B: usize = 2;
 const ST_C: usize = 3;
 
 // start and done states
-const ST_START: usize = ST_A;
+const ST_START: usize = ST_I;
 const ST_DONE: usize = 4;
 
 // end of file marker:
@@ -32,13 +33,15 @@ const ST_DONE: usize = 4;
 const EOF: usize = 0xFFFF;
 
 // conversion of the regular expression: a+b+c
-const REGEX: [(usize, usize, Option<char>); 6] = [
-    (ST_A, ST_A, Some('a')),    // you can stay in ST_A by reading 'a'
-    (ST_A, ST_B, Some('a')),    // or move to ST_B by reading 'a'
-    (ST_B, ST_B, Some('b')),    // you can stay in ST_B by reading 'b'
-    (ST_B, ST_C, Some('b')),    // or move to ST_C by reading 'b'
-    (ST_C, ST_DONE, Some('c')), // you can move to ST_DONE by reading 'c'
-    (ST_DONE, ST_DONE, None),   // you can stay in ST_DONE by reading EOF
+const REGEX: [(usize, usize, Option<char>); 8] = [
+    (ST_I, ST_A, Some('a')),
+    (ST_I, ST_B, Some('b')),
+    (ST_A, ST_A, Some('a')),
+    (ST_A, ST_B, Some('b')),
+    (ST_B, ST_B, Some('b')),
+    (ST_B, ST_C, Some('c')),
+    (ST_C, ST_DONE, None),
+    (ST_DONE, ST_DONE, None),
 ];
 // ANCHOR_END: regex
 
@@ -60,8 +63,7 @@ struct TestConfig<F: Field + Clone> {
     table_state_current: TableColumn,
     table_state_next: TableColumn,
     table_transition_char: TableColumn,
-    fixed_state_1: Column<Fixed>,
-    fixed_state_2: Column<Fixed>,
+    fixed_state: Column<Fixed>,
 }
 
 impl<F: PrimeField> Circuit<F> for TestCircuit<F> {
@@ -85,7 +87,6 @@ impl<F: PrimeField> Circuit<F> for TestCircuit<F> {
         let ch = meta.advice_column();
 
         let fix_st = meta.fixed_column();
-        let fix_st_2 = meta.fixed_column();
 
         let tbl_st_cur = meta.lookup_table_column();
         let tbl_st_nxt = meta.lookup_table_column();
@@ -97,11 +98,8 @@ impl<F: PrimeField> Circuit<F> for TestCircuit<F> {
         meta.create_gate("fix-st", |meta| {
             let current_state = meta.query_advice(st, Rotation::cur());
             let fixed_state_1 = meta.query_fixed(fix_st, Rotation::cur());
-            let fixed_state_2 = meta.query_fixed(fix_st_2, Rotation::cur());
             let enabled_fixed_match = meta.query_selector(q_match);
-            vec![enabled_fixed_match *
-                (current_state.clone() - fixed_state_1) *
-                (current_state - fixed_state_2)]
+            vec![enabled_fixed_match * (current_state.clone() - fixed_state_1)]
         });
         // ANCHOR_END: fix
 
@@ -127,8 +125,7 @@ impl<F: PrimeField> Circuit<F> for TestCircuit<F> {
             table_state_current: tbl_st_cur,
             table_state_next: tbl_st_nxt,
             table_transition_char: tbl_ch,
-            fixed_state_1: fix_st,
-            fixed_state_2: fix_st_2,
+            fixed_state: fix_st,
             q_match,
         }
     }
@@ -191,8 +188,7 @@ impl<F: PrimeField> Circuit<F> for TestCircuit<F> {
             || "regex",
             |mut region| {
                 // at offset 0, the state is ST_START
-                region.assign_fixed(|| "initial state", config.fixed_state_1, 0, || Value::known(F::from(ST_START as u64)))?;
-                region.assign_fixed(|| "initial state 2", config.fixed_state_2, 0, || Value::known(F::from(ST_B as u64)))?;
+                region.assign_fixed(|| "initial state", config.fixed_state, 0, || Value::known(F::from(ST_START as u64)))?;
 
                 config.q_match.enable(&mut region, 0)?;
                 // ANCHOR_END: region_start
@@ -245,8 +241,7 @@ impl<F: PrimeField> Circuit<F> for TestCircuit<F> {
                     MAX_STR_LEN,
                     || Value::known(F::from(ST_DONE as u64)),
                 )?;
-                region.assign_fixed(|| "final state", config.fixed_state_1, MAX_STR_LEN, || Value::known(F::from(ST_DONE as u64)))?;
-                region.assign_fixed(|| "final state", config.fixed_state_2, MAX_STR_LEN, || Value::known(F::from(ST_DONE as u64)))?;
+                region.assign_fixed(|| "final state", config.fixed_state, MAX_STR_LEN, || Value::known(F::from(ST_DONE as u64)))?;
                 config.q_match.enable(&mut region, MAX_STR_LEN)?;
                 Ok(())
             },
@@ -267,14 +262,15 @@ fn main() {
         str: Value::known("aaabbbc".to_string()),
         // manually create a trace of the state transitions
         sts: Value::known(vec![
-            ST_A,    // ST_A -a-> ST_A (START)
-            ST_A,    // ST_A -a-> ST_A
-            ST_A,    // ST_A -a-> ST_A
-            ST_B,    // ST_A -a-> ST_B
-            ST_B,    // ST_B -b-> ST_B
-            ST_B,    // ST_B -b-> ST_B
-            ST_C,    // ST_B -b-> ST_C
-            ST_DONE, // ST_C -c-> ST_DONE
+            ST_I, //a
+            ST_A, //a
+            ST_A, //a
+            ST_A, //b
+            ST_B, //b
+            ST_B, //b
+            ST_B, //c
+            ST_C,
+            // ST_DONE,
         ]),
     };
     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
@@ -295,14 +291,14 @@ mod tests {
             str: Value::known("aaabbbc".to_string()),
             // manually create a trace of the state transitions
             sts: Value::known(vec![
-                ST_A,    // ST_A -a-> ST_A (START)
-                ST_A,    // ST_A -a-> ST_A
-                ST_A,    // ST_A -a-> ST_A
-                ST_B,    // ST_A -a-> ST_B
-                ST_B,    // ST_B -b-> ST_B
-                ST_B,    // ST_B -b-> ST_B
-                ST_C,    // ST_B -b-> ST_C
-                ST_DONE, // ST_C -c-> ST_DONE
+                ST_I, //a
+                ST_A, //a
+                ST_A, //a
+                ST_A, //b
+                ST_B, //b
+                ST_B, //b
+                ST_B, //c
+                ST_C,
             ]),
         };
         let prover = MockProver::run(8, &circuit, vec![]).unwrap();
@@ -321,11 +317,11 @@ mod tests {
             str: Value::known("bbbc".to_string()),
             // manually create a trace of the state transitions
             sts: Value::known(vec![
-                ST_B,    // ST_B -b-> ST_B (START)
-                ST_B,    // ST_B -b-> ST_B
-                ST_B,    // ST_B -b-> ST_B
-                ST_C,    // ST_B -b-> ST_C
-                ST_DONE, // ST_C -c-> ST_DONE
+                ST_I, //b
+                ST_B, //b
+                ST_B, //b
+                ST_B, //c
+                ST_C,
             ]),
         };
         let prover = MockProver::run(8, &circuit, vec![]).unwrap();
