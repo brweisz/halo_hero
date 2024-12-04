@@ -215,4 +215,22 @@ mod test {
         let prover = MockProver::run(16, &circuit, vec![]).unwrap();
         prover.verify().unwrap();
     }
+
+    #[test]
+    #[should_panic]
+    fn test_advice_cannot_be_greater_than_255(){
+        use halo2_proofs::halo2curves::bn256::Fr;
+        use super::*;
+        let circuit = TestCircuit::<Fr> {
+            _ph: PhantomData,
+            advice: Value::known(Fr::from(300)),
+            bits: [
+                Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+                Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                Value::known(Fr::from(0)), Value::known(Fr::from(1))
+            ]
+        };
+        let prover = MockProver::run(16, &circuit, vec![]).unwrap();
+        prover.verify().unwrap();
+    }
 }
