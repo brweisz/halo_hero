@@ -59,7 +59,9 @@ struct TestConfig<F: Field + Clone> {
 
 impl<F: PrimeField> U8Chip<F> {
     fn new_for(meta: &mut ConstraintSystem<F>, advice: Column<Advice>) -> Self {
-        let bits = [meta.advice_column(); 8];
+        let bits = [meta.advice_column(), meta.advice_column(),
+            meta.advice_column(), meta.advice_column(), meta.advice_column(),
+            meta.advice_column(), meta.advice_column(), meta.advice_column()];
         let t_range = meta.lookup_table_column();
         let q_decomposed = meta.complex_selector();
 
@@ -73,10 +75,11 @@ impl<F: PrimeField> U8Chip<F> {
             let bits_: Vec<Expression<F>> = bits.into_iter().map(|column|{
                 meta.query_advice(column, Rotation::cur())
             }).collect();
+
             let advice_value = meta.query_advice(advice, Rotation::cur());
             let q_decomposed = meta.query_selector(q_decomposed);
             vec![
-                q_decomposed.clone() * (bits_[0].clone() * (bits_[0].clone() - Expression::Constant(F::ONE))),
+                q_decomposed.clone() * bits_[0].clone() * (bits_[0].clone() - Expression::Constant(F::ONE)),
                 q_decomposed.clone() * (bits_[1].clone() * (bits_[1].clone() - Expression::Constant(F::ONE))),
                 q_decomposed.clone() * (bits_[2].clone() * (bits_[2].clone() - Expression::Constant(F::ONE))),
                 q_decomposed.clone() * (bits_[3].clone() * (bits_[3].clone() - Expression::Constant(F::ONE))),
@@ -85,7 +88,7 @@ impl<F: PrimeField> U8Chip<F> {
                 q_decomposed.clone() * (bits_[6].clone() * (bits_[6].clone() - Expression::Constant(F::ONE))),
                 q_decomposed.clone() * (bits_[7].clone() * (bits_[7].clone() - Expression::Constant(F::ONE))),
                 q_decomposed.clone() * (advice_value -
-                    bits_[0].clone() * Expression::Constant(F::from(1<<0))-
+                    bits_[0].clone() * Expression::Constant(F::from(1<<0)) -
                     bits_[1].clone() * Expression::Constant(F::from(1<<1)) -
                     bits_[2].clone() * Expression::Constant(F::from(1<<2)) -
                     bits_[3].clone() * Expression::Constant(F::from(1<<3)) -
