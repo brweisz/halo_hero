@@ -13,10 +13,14 @@ use halo2_proofs::circuit::{Value};
 use halo2_proofs::plonk::{Advice, Column, Expression, Selector, TableColumn};
 use halo2_proofs::poly::Rotation;
 
+struct ExampleRow<F> {
+    advice: Value<F>,
+    bits: [Value<F>; 8]
+}
+
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
-    advice: Value<F>,
-    bits: [Value<F>; 8],
+    rows: [ExampleRow<F>; 3]
 }
 
 const TABLE_OF_BIT_OPERATIONS: [[u8; 4]; 12] = [
@@ -41,13 +45,13 @@ const TABLE_OF_BIT_OPERATIONS: [[u8; 4]; 12] = [
 struct U8Chip<F: Field + Clone> {
     _ph: PhantomData<F>,
     bits: [Column<Advice>; 8],
-    // t_selector: TableColumn,
-    // t_left: TableColumn,
-    // t_right: TableColumn,
-    // t_result: TableColumn,
+    t_selector: TableColumn,
+    t_left: TableColumn,
+    t_right: TableColumn,
+    t_result: TableColumn,
     t_range: TableColumn,
-    q_decomposed: Selector,
-    // q_xor: Selector,
+    q_decomposed: Selector, // TODO: separate into q_range and q_decompose
+    q_xor: Selector,
     // q_and: Selector,
     // q_or: Selector,
 }
@@ -66,6 +70,31 @@ impl<F: PrimeField> U8Chip<F> {
             meta.advice_column(), meta.advice_column(), meta.advice_column()];
         let t_range = meta.lookup_table_column();
         let q_decomposed = meta.complex_selector();
+
+        let t_selector = meta.lookup_table_column();
+        let t_left = meta.lookup_table_column();
+        let t_right = meta.lookup_table_column();
+        let t_result = meta.lookup_table_column();
+        let q_xor = meta.complex_selector();
+
+        meta.lookup("Bit xor", |meta|{
+            let bits_left: Vec<Expression<F>> = bits.into_iter().map(|column|{
+                meta.query_advice(column, Rotation(0)) }).collect();
+            let bits_right: Vec<Expression<F>> = bits.into_iter().map(|column|{
+                meta.query_advice(column, Rotation(1)) }).collect();
+            let bits_result: Vec<Expression<F>> = bits.into_iter().map(|column|{
+                meta.query_advice(column, Rotation(2)) }).collect();
+            let q_xor = meta.query_selector(q_xor);
+
+            let mut restrictions = vec![];
+            for i in 0..8 {
+                restrictions.push((q_xor.clone() * Expression::Constant(F::ZERO), t_selector));
+                restrictions.push((q_xor.clone() * bits_left[i].clone(), t_left));
+                restrictions.push((q_xor.clone() * bits_right[i].clone(), t_right));
+                restrictions.push((q_xor.clone() * bits_result[i].clone(), t_result));
+            };
+            restrictions
+        });
 
         meta.lookup("Range check u8", |meta|{
             let advice_value = meta.query_advice(advice, Rotation::cur());
@@ -99,7 +128,10 @@ impl<F: PrimeField> U8Chip<F> {
             restrictions
 
         });
-        Self { _ph: PhantomData, bits, t_range, q_decomposed }
+        Self {
+            _ph: PhantomData, bits, t_range, q_decomposed,
+            q_xor, t_left, t_right, t_selector, t_result
+        }
     }
 }
 
@@ -112,6 +144,33 @@ impl<F: Field + PrimeField> TestCircuit<F>{
             Ok(())
         });
     }
+
+    fn set_lookup_table_xor(&self, layouter: &mut impl Layouter<F>, config: &TestConfig<F>){
+        let _ = layouter.assign_table(|| "bit xor table", |mut table| {
+            // TODO: please refactor this hurts
+            table.assign_cell(|| "xxx", config.u8_chip.t_selector, 0, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_selector, 1, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_selector, 2, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_selector, 3, ||Value::known(F::ZERO))?;
+
+            table.assign_cell(|| "xxx", config.u8_chip.t_left, 0, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_left, 1, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_left, 2, ||Value::known(F::ONE))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_left, 3, ||Value::known(F::ONE))?;
+
+            table.assign_cell(|| "xxx", config.u8_chip.t_right, 0, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_right, 1, ||Value::known(F::ONE))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_right, 2, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_right, 3, ||Value::known(F::ONE))?;
+
+            table.assign_cell(|| "xxx", config.u8_chip.t_result, 0, ||Value::known(F::ZERO))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_result, 1, ||Value::known(F::ONE))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_result, 2, ||Value::known(F::ONE))?;
+            table.assign_cell(|| "xxx", config.u8_chip.t_result, 3, ||Value::known(F::ZERO))?;
+
+            Ok(())
+        });
+    }
 }
 
 impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
@@ -121,11 +180,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
     fn without_witnesses(&self) -> Self {
         TestCircuit {
             _ph: PhantomData,
-            advice: Value::unknown(),
-            bits: [
-               Value::unknown(), Value::unknown(), Value::unknown(), Value::unknown(),
-               Value::unknown(), Value::unknown(), Value::unknown(), Value::unknown()
-            ]
+            rows: [ExampleRow { advice: Value::unknown(), bits: [Value::unknown(); 8] }; 3]
         }
     }
 
@@ -147,6 +202,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), plonk::Error> {
         self.set_lookup_table_u8(&mut layouter, &config);
+        self.set_lookup_table_xor(&mut layouter, &config);
 
         let _ = layouter.assign_region(||"Pruebita", |mut region| {
             config.u8_chip.q_decomposed.enable(&mut region, 0)?;
@@ -166,12 +222,34 @@ fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
     let circuit = TestCircuit::<Fr> {
         _ph: PhantomData,
-        advice: Value::known(Fr::from(7)),
-        bits: [
-            Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
-            Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
-            Value::known(Fr::from(0)), Value::known(Fr::from(0))
+        rows: [
+            ExampleRow {
+                advice: Value::known(Fr::from(7)),
+                bits: [
+                    Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+                    Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                    Value::known(Fr::from(0)), Value::known(Fr::from(0))
+                ]
+            },
+            ExampleRow {
+                advice: Value::known(Fr::from(8)),
+                bits: [
+                    Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                    Value::known(Fr::from(1)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                    Value::known(Fr::from(0)), Value::known(Fr::from(0))
+                ]
+            },
+            ExampleRow {
+                advice: Value::known(Fr::from(15)),
+                bits: [
+                    Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+                    Value::known(Fr::from(1)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                    Value::known(Fr::from(0)), Value::known(Fr::from(0))
+                ]
+            },
+
         ]
+
     };
     let prover = MockProver::run(16, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
