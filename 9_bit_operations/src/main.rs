@@ -80,15 +80,11 @@ impl<F: PrimeField> U8Chip<F> {
 
             let advice_value = meta.query_advice(advice, Rotation::cur());
             let q_decomposed = meta.query_selector(q_decomposed);
-            vec![
-                q_decomposed.clone() * bits_[0].clone() * (bits_[0].clone() - Expression::Constant(F::ONE)),
-                q_decomposed.clone() * (bits_[1].clone() * (bits_[1].clone() - Expression::Constant(F::ONE))),
-                q_decomposed.clone() * (bits_[2].clone() * (bits_[2].clone() - Expression::Constant(F::ONE))),
-                q_decomposed.clone() * (bits_[3].clone() * (bits_[3].clone() - Expression::Constant(F::ONE))),
-                q_decomposed.clone() * (bits_[4].clone() * (bits_[4].clone() - Expression::Constant(F::ONE))),
-                q_decomposed.clone() * (bits_[5].clone() * (bits_[5].clone() - Expression::Constant(F::ONE))),
-                q_decomposed.clone() * (bits_[6].clone() * (bits_[6].clone() - Expression::Constant(F::ONE))),
-                q_decomposed.clone() * (bits_[7].clone() * (bits_[7].clone() - Expression::Constant(F::ONE))),
+
+            let mut restrictions: Vec<Expression<F>> = (0..8).into_iter().map(|i|{
+                q_decomposed.clone() * bits_[i].clone() * (bits_[i].clone() - Expression::Constant(F::ONE))
+            }).collect();
+            restrictions.push(
                 q_decomposed.clone() * (advice_value -
                     bits_[0].clone() * Expression::Constant(F::from(1<<0)) -
                     bits_[1].clone() * Expression::Constant(F::from(1<<1)) -
@@ -99,7 +95,9 @@ impl<F: PrimeField> U8Chip<F> {
                     bits_[6].clone() * Expression::Constant(F::from(1<<6)) -
                     bits_[7].clone() * Expression::Constant(F::from(1<<7))
                 )
-            ]
+            );
+            restrictions
+
         });
         Self { _ph: PhantomData, bits, t_range, q_decomposed }
     }
