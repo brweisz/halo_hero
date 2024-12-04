@@ -22,6 +22,7 @@ Acá se usan varios otros objetos:
 
 layouter.assign_region(nombre de la region, funcion que recibe la region y la configura) --> Devuelve una AssignedCell
 layouter.assign_table(nombre de la tabla, funcion que recibe la tabla y la configura) --> Result<(), Error>
+layouter.constrain_instance(una celda cualquiera, columna instance, fila en la columna instance)?;
 
 La región tiene los métodos:
 
