@@ -15,6 +15,8 @@ use halo2_proofs::poly::Rotation;
 
 struct TestCircuit<F: Field> {
     _ph: PhantomData<F>,
+    advice: Value<F>,
+    bits: [Value<F>; 8],
 }
 
 const TABLE_OF_BIT_OPERATIONS: [[u8; 4]; 12] = [
@@ -119,7 +121,14 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        TestCircuit { _ph: PhantomData }
+        TestCircuit {
+            _ph: PhantomData,
+            advice: Value::unknown(),
+            bits: [
+               Value::unknown(), Value::unknown(), Value::unknown(), Value::unknown(),
+               Value::unknown(), Value::unknown(), Value::unknown(), Value::unknown()
+            ]
+        }
     }
 
     #[allow(unused_variables)]
@@ -143,12 +152,9 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
 
         let _ = layouter.assign_region(||"Pruebita", |mut region| {
             config.u8_chip.q_decomposed.enable(&mut region, 0)?;
-            region.assign_advice(||"Valor de prueba", config.advice, 0, || Value::known(F::from(7)))?;
-            region.assign_advice(||"Descomposicion en bits", config.u8_chip.bits[0], 0, || Value::known(F::from(1)))?;
-            region.assign_advice(||"Descomposicion en bits", config.u8_chip.bits[1], 0, || Value::known(F::from(1)))?;
-            region.assign_advice(||"Descomposicion en bits", config.u8_chip.bits[2], 0, || Value::known(F::from(1)))?;
-            for i in 3..8 {
-                region.assign_advice(||"Descomposicion en bits", config.u8_chip.bits[i], 0, || Value::known(F::from(0)))?;
+            region.assign_advice(||"Valor de prueba", config.advice, 0, || self.advice)?;
+            for i in 0..8 {
+                region.assign_advice(||"Descomposicion en bits", config.u8_chip.bits[i], 0, || self.bits[i])?;
             }
             Ok(())
         });
@@ -160,7 +166,15 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
 
 fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
-    let circuit = TestCircuit::<Fr> { _ph: PhantomData };
+    let circuit = TestCircuit::<Fr> {
+        _ph: PhantomData,
+        advice: Value::known(Fr::from(7)),
+        bits: [
+            Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+            Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+            Value::known(Fr::from(0)), Value::known(Fr::from(0))
+        ]
+    };
     let prover = MockProver::run(16, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
 }
@@ -168,10 +182,36 @@ fn main() {
 #[cfg(test)]
 mod test {
     #[test]
-    fn test(){
+    fn test_should_decompose_correctly(){
         use halo2_proofs::halo2curves::bn256::Fr;
         use super::*;
-        let circuit = TestCircuit::<Fr> { _ph: PhantomData };
+        let circuit = TestCircuit::<Fr> {
+            _ph: PhantomData,
+            advice: Value::known(Fr::from(7)),
+            bits: [
+                Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+                Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                Value::known(Fr::from(0)), Value::known(Fr::from(0))
+            ]
+        };
+        let prover = MockProver::run(16, &circuit, vec![]).unwrap();
+        prover.verify().unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_should_decompose_incorrectly(){
+        use halo2_proofs::halo2curves::bn256::Fr;
+        use super::*;
+        let circuit = TestCircuit::<Fr> {
+            _ph: PhantomData,
+            advice: Value::known(Fr::from(7)),
+            bits: [
+                Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+                Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                Value::known(Fr::from(0)), Value::known(Fr::from(1))
+            ]
+        };
         let prover = MockProver::run(16, &circuit, vec![]).unwrap();
         prover.verify().unwrap();
     }
