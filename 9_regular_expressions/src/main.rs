@@ -327,4 +327,29 @@ mod tests {
         let prover = MockProver::run(8, &circuit, vec![]).unwrap();
         prover.verify().unwrap();
     }
+
+    #[test]
+    #[should_panic]
+    fn test_shouldnt_pass_mixed_transition(){
+        use halo2_proofs::halo2curves::bn256::Fr;
+        use super::*;
+
+        // run the MockProver
+        let circuit = TestCircuit::<Fr> {
+            _ph: PhantomData,
+            // the string to match
+            str: Value::known("bbbac".to_string()),
+            // manually create a trace of the state transitions
+            sts: Value::known(vec![
+                ST_I, //b
+                ST_B, //b
+                ST_B, //b
+                ST_A, //a
+                ST_B, //c
+                ST_C,
+            ]),
+        };
+        let prover = MockProver::run(8, &circuit, vec![]).unwrap();
+        prover.verify().unwrap();
+    }
 }
