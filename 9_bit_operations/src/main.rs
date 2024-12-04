@@ -61,10 +61,10 @@ impl<F: PrimeField> U8Chip<F> {
     fn new_for(meta: &mut ConstraintSystem<F>, advice: Column<Advice>) -> Self {
         let bits = [meta.advice_column(); 8];
         let t_range = meta.lookup_table_column();
-        let q_decomposed = meta.selector();
+        let q_decomposed = meta.complex_selector();
 
         meta.lookup("Range check u8", |meta|{
-           let advice_value = meta.query_advice(advice, Rotation::cur());
+            let advice_value = meta.query_advice(advice, Rotation::cur());
             let q_decomposed_ = meta.query_selector(q_decomposed);
            vec![(q_decomposed_ * advice_value, t_range)]
         });
@@ -85,7 +85,7 @@ impl<F: PrimeField> U8Chip<F> {
                 q_decomposed.clone() * (bits_[6].clone() * (bits_[6].clone() - Expression::Constant(F::ONE))),
                 q_decomposed.clone() * (bits_[7].clone() * (bits_[7].clone() - Expression::Constant(F::ONE))),
                 q_decomposed.clone() * (advice_value -
-                    bits_[0].clone() -
+                    bits_[0].clone() * Expression::Constant(F::from(1<<0))-
                     bits_[1].clone() * Expression::Constant(F::from(1<<1)) -
                     bits_[2].clone() * Expression::Constant(F::from(1<<2)) -
                     bits_[3].clone() * Expression::Constant(F::from(1<<3)) -
@@ -96,12 +96,7 @@ impl<F: PrimeField> U8Chip<F> {
                 )
             ]
         });
-        Self {
-            _ph: PhantomData,
-            bits,
-            t_range,
-            q_decomposed,
-        }
+        Self { _ph: PhantomData, bits, t_range, q_decomposed }
     }
 }
 
@@ -165,4 +160,16 @@ fn main() {
     let circuit = TestCircuit::<Fr> { _ph: PhantomData };
     let prover = MockProver::run(16, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test(){
+        use halo2_proofs::halo2curves::bn256::Fr;
+        use super::*;
+        let circuit = TestCircuit::<Fr> { _ph: PhantomData };
+        let prover = MockProver::run(16, &circuit, vec![]).unwrap();
+        prover.verify().unwrap();
+    }
 }
