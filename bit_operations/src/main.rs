@@ -106,7 +106,7 @@ impl<F: PrimeField> U8Chip<F> {
 }
 
 impl<F: Field + PrimeField> TestCircuit<F>{
-    fn set_lookup_table_u8(&self, mut layouter: impl Layouter<F>, config: &TestConfig<F>){
+    fn set_lookup_table_u8(&self, layouter: &mut impl Layouter<F>, config: &TestConfig<F>){
         let _ = layouter.assign_table(|| "Range Check u8", |mut table| {
             for i in 0..256u128 {
                 table.assign_cell(|| "Range check u8 table", config.u8_chip.t_range, i as usize, ||Value::known(F::from_u128(i)))?;
@@ -127,7 +127,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
     #[allow(unused_variables)]
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let advice = meta.advice_column();
-        let u8_chip = U8Chip::new_for(&mut meta, advice.clone());
+        let u8_chip = U8Chip::new_for(meta, advice.clone());
         TestConfig {
             _ph: PhantomData,
             advice,
@@ -141,7 +141,7 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), plonk::Error> {
-        self.set_lookup_table_u8(&layouter, &config);
+        self.set_lookup_table_u8(&mut layouter, &config);
 
         let _ = layouter.assign_region(||"Pruebita", |mut region| {
             config.u8_chip.q_decomposed.enable(&mut region, 0)?;
@@ -163,6 +163,6 @@ impl<F: Field + PrimeField> Circuit<F> for TestCircuit<F> {
 fn main() {
     use halo2_proofs::halo2curves::bn256::Fr;
     let circuit = TestCircuit::<Fr> { _ph: PhantomData };
-    let prover = MockProver::run(8, &circuit, vec![]).unwrap();
+    let prover = MockProver::run(16, &circuit, vec![]).unwrap();
     prover.verify().unwrap();
 }
