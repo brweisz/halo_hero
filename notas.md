@@ -21,6 +21,7 @@ Acá se usan varios otros objetos:
     misma según la configuración.
 
 layouter.assign_region(nombre de la region, funcion que recibe la region y la configura) --> Devuelve una AssignedCell
+layouter.assign_table(nombre de la tabla, funcion que recibe la tabla y la configura) --> Result<(), Error>
 
 La región tiene los métodos:
 
@@ -35,6 +36,13 @@ region.assign_fixed(descripcion,
                     to: valor)
 
 region.constrain_equal(cell, cell)
+
+La table tiene los metodos:
+
+table.assign_cell( || Nombre tabla,
+                    columna de tabla correspondiente,
+                    offset,
+                    || Value::known(x))?;
 
 Estructura de la traza
 ----------------------
