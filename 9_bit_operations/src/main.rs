@@ -93,6 +93,9 @@ impl<F: PrimeField> U8Chip<F> {
                 // restrictions.push((q_xor.clone() * bits_left[i].clone(), t_left));
                 // restrictions.push((q_xor.clone() * bits_right[i].clone(), t_right));
                 // restrictions.push((q_xor.clone() * bits_result[i].clone(), t_result));
+
+                // ------------------------------------------------------------------------
+
                 restrictions.push(q_xor.clone() * (
                     bits_left[i].clone() * bits_left[i].clone() +
                     bits_right[i].clone() * bits_right[i].clone() -
@@ -271,7 +274,7 @@ fn main() {
 #[cfg(test)]
 mod test {
     #[test]
-    fn test_should_decompose_correctly(){
+    fn test_should_xor_and_decompose_correctly(){
         use halo2_proofs::halo2curves::bn256::Fr;
         use super::*;
         let circuit = TestCircuit::<Fr> {
@@ -308,39 +311,42 @@ mod test {
         prover.verify().unwrap();
     }
 
-    /*#[test]
+    #[test]
     #[should_panic]
-    fn test_should_decompose_incorrectly(){
+    fn test_should_not_xor_and_decompose_correctly(){
         use halo2_proofs::halo2curves::bn256::Fr;
         use super::*;
         let circuit = TestCircuit::<Fr> {
             _ph: PhantomData,
-            advice: Value::known(Fr::from(7)),
-            bits: [
-                Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
-                Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
-                Value::known(Fr::from(0)), Value::known(Fr::from(1))
+            rows: [
+                ExampleRow {
+                    advice: Value::known(Fr::from(8)),
+                    bits: [
+                        Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                        Value::known(Fr::from(1)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                        Value::known(Fr::from(0)), Value::known(Fr::from(0))
+                    ]
+                },
+                ExampleRow {
+                    advice: Value::known(Fr::from(8)),
+                    bits: [
+                        Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                        Value::known(Fr::from(1)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                        Value::known(Fr::from(0)), Value::known(Fr::from(0))
+                    ]
+                },
+                ExampleRow {
+                    advice: Value::known(Fr::from(15)),
+                    bits: [
+                        Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
+                        Value::known(Fr::from(1)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
+                        Value::known(Fr::from(0)), Value::known(Fr::from(0))
+                    ]
+                },
+
             ]
         };
         let prover = MockProver::run(16, &circuit, vec![]).unwrap();
         prover.verify().unwrap();
     }
-
-    #[test]
-    #[should_panic]
-    fn test_advice_cannot_be_greater_than_255(){
-        use halo2_proofs::halo2curves::bn256::Fr;
-        use super::*;
-        let circuit = TestCircuit::<Fr> {
-            _ph: PhantomData,
-            advice: Value::known(Fr::from(300)),
-            bits: [
-                Value::known(Fr::from(1)), Value::known(Fr::from(1)), Value::known(Fr::from(1)),
-                Value::known(Fr::from(0)), Value::known(Fr::from(0)), Value::known(Fr::from(0)),
-                Value::known(Fr::from(0)), Value::known(Fr::from(1))
-            ]
-        };
-        let prover = MockProver::run(16, &circuit, vec![]).unwrap();
-        prover.verify().unwrap();
-    }*/
 }
